@@ -1,0 +1,10 @@
+google-generativeai
+python-dotenv
+transformers
+peft
+trl
+torch
+datasets
+wandb
+opencv-python
+Pillow
