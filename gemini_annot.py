@@ -86,6 +86,9 @@ def geminiInference(videofile: Union[genai.Client.files, List[genai.Client.files
             ]
         )
         prediction = response.text
+        #Check if the prediction is empty or None
+        if prediction is None:
+            raise ValueError("The prediction is empty or None.")
         return prediction
     
 
