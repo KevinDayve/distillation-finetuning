@@ -9,6 +9,7 @@ from load_model import Model
 from util import collate_fn
 import subprocess
 import wandb
+from gemini_annot import evaluate
 
 # wandbAuth = os.getenv("WANDB_AUTH")
 # if wandbAuth is None:
@@ -16,6 +17,7 @@ import wandb
 
 #Config
 DataDir = "" #Path to the data directory
+annotDir = "" #Path to the annotated directory for evaluation. This is expected to have the structure: root/ActivityName{i}/VideoFile{i}.mp4
 OutputDir = "./Gemma3-4b-it-Finetuned"
 N = 16 #Frames to extract per video.
 BSZ = 4 #Batch size
@@ -35,6 +37,18 @@ loraConfig = LoraConfig(
 #Load the Gemma 3 model.
 model = Model(model_id=modelID, lora_config=loraConfig, load_in_8bit=True, device_map="auto", torch_dtype="bf16")
 model, processor = model.loadModel()
+
+#Evaluate the Gemini propreitary model and see if its fit for generating labels for finetuning, if not, we dont proceed.
+if os.path.isdir(annotDir) and len(annotDir) > 0:
+    metrics = evaluate(
+        videoDir=annotDir,
+        modelID=modelID,
+        sampleSize=100,
+    )
+    if metrics['accuracy'] < 0.7:
+        raise ValueError(
+            f"{modelID} is not a good model for generating labels for finetuning. Please try enhancing your prompts or use a different model"
+        )
 
 
 #build the dataset.

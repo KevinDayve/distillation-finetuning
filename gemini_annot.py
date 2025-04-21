@@ -91,6 +91,66 @@ def geminiInference(videofile: Union[genai.Client.files, List[genai.Client.files
             raise ValueError("The prediction is empty or None.")
         return prediction
     
+def evaluate(videoDir: str, modelID: str = "gemini-2.0-flash-lite", sampleSize: int = 100) -> dict:
+    """
+    Evaluates the Gemini model performance on a randomly selected sample from the dataset / directory.
+    Returns:
+        A dictionary containing Model Perfromance metrics.
+    Args:
+        videoDir (str): The directory containing the videos to evaluate.
+        modelID (str): The model ID to use for Inference, default is 'gemini-2.0-flash-lite'
+        sampleSize (int): The number of samples to evaluate, default is 100
+    """
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+    import random
+    import os
+
+    #Randomly select a sample of videos from the directory / dataset.
+    #The implication here is the directory has the following structure:
+        #/rootDirectory/ActivityName{i}/VideoFile{i}.mp4
+    
+    allVideos: List[tuple[str, str]] = []
+    for label in os.listdir(videoDir):
+        labelDir = os.path.join(videoDir, label)
+        if os.path.isdir(labelDir):
+            for video in os.listdir(labelDir):
+                videoPath = os.path.join(labelDir, video)
+                if videoPath.endswith('.mp4'):
+                    allVideos.append((label, videoPath))
+    if sampleSize > len(allVideos):
+        print(f'[WARNING] Sample size is greater than the number of videos in the directory. Using all {len(allVideos)} videos as "samples".')
+        sampleSize = len(allVideos)
+    sample = random.sample(
+        allVideos,
+        sampleSize
+    )
+    videoPaths, trueLabels = zip(*sample)
+
+    uploadedVideos = uploadVideos(videos=list(videoPaths))
+    Prompt = f"What is the activity going on here from the following: {trueLabels}. Just return the activity name."
+
+    Predictions = geminiInference(
+        videofile=uploadedVideos,
+        prompt=Prompt,
+        model_id=modelID
+    )
+
+    #Preprocess the predictions to match labels.
+    predictedLabels = [Pred.strip().lower() for Pred in Predictions]
+    trueLabels = [label.strip().lower() for label in trueLabels]
+
+    metrics = {
+        "accuracy": accuracy_score(trueLabels, predictedLabels),
+        "precision": precision_score(trueLabels, predictedLabels, average='weighted', zero_division=0),
+        "recall": recall_score(trueLabels, predictedLabels, average='weighted', zero_division=0),
+        "F1-Score": f1_score(trueLabels, predictedLabels, average='weighted', zero_division=0)
+    }
+
+    for key, value in metrics.items():
+        print(f"{key.capitalize():<10}: {value:.3f}")
+    return metrics
+
+    
 
 if __name__ == "__main__":
     #Example
