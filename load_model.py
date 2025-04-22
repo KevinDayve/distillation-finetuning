@@ -56,9 +56,20 @@ class Model:
 if __name__ == "__main__":
     #Example
     import os
+    import argparse
     from util import frameExtractor, formatResponse
     import warnings
     warnings.filterwarnings("ignore")
+
+    parser = argparse.ArgumentParser(description="Video inference using Gemma3 model.")
+    parser.add_argument(
+        "--video",
+        type=str,
+        default="/root/distillation-finetuning/obama.mp4",
+        help="Path to the video file."
+    )
+    args = parser.parse_args()
+
     model = Model(
         model_id="google/gemma-3-4b-it",
         lora_config=None,
@@ -68,44 +79,45 @@ if __name__ == "__main__":
     )
     try:
         model, processor = model.loadModel()
-        print(f'Model and processor loaded successfully.')
+        print("Model and processor loaded successfully.")
     except Exception as e:
         print(f"Error loading model: {e}")
         raise
 
-    #Example of using the model and processor with videos.
-    path = '/root/distillation-finetuning/obama.mp4' #path to video.
-    if not os.path.exists(path) and not path.endswith(".mp4"):
-        raise FileNotFoundError(f"No file found at {path}, please provide a valid video path.")
-    #extract frames and timestamps from the video!
-    frames = frameExtractor(path, numframes=8)
-    
+    if not os.path.exists(args.video) or not args.video.endswith(".mp4"):
+        raise FileNotFoundError(f"No file found at {args.video}, please provide a valid video path.")
+
+    # Extract frames and timestamps from the video
+    frames = frameExtractor(args.video, numframes=8)
     sample = {
         "image": frames,
         "text": "What is going on here?",
         "label": None
     }
 
-    #Format the response and have it printed for sanity.
+    # Format the response and print it.
     formattedResponse = formatResponse(
-        systemMessages = 'You are an expert evaluator of videos',
+        systemMessages='You are an expert evaluator of videos',
         sample=sample
     )
     from pprint import pprint
-    # pprint(formattedResponse)
     pprint(formattedResponse)
 
     model.eval()
-    inputs = processor.apply_chat_template(
-    formattedResponse, add_generation_prompt=True, tokenize=True,
-    return_dict=True, return_tensors="pt").to(model.device, dtype=torch.bfloat16)
-    inputLen = inputs["input_ids"].shape[1]
-    with torch.inference_mode():
-        output = model.generate(
-            **inputs,
-            max_new_tokens=128,
-            do_sample=False
-        )
-        output = output[0][inputLen:]
-    decodedOutput = processor.decode(output, skip_special_tokens=True)
-    print(decodedOutput)
+    try:
+        inputs = processor.apply_chat_template(
+            formattedResponse, add_generation_prompt=True, tokenize=True,
+            return_dict=True, return_tensors="pt"
+        ).to(model.device, dtype=torch.bfloat16)
+        inputLen = inputs["input_ids"].shape[1]
+        with torch.inference_mode():
+            output = model.generate(
+                **inputs,
+                max_new_tokens=128,
+                do_sample=False
+            )
+            output = output[0][inputLen:]
+        decodedOutput = processor.decode(output, skip_special_tokens=True)
+        print(decodedOutput)
+    except Exception as e:
+        raise Exception(f"Error during inference: {e}")
