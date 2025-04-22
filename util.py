@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union, Tuple
 from transformers import Batch, AutoProcessor
 import torch
 from PIL import Image
@@ -6,36 +6,48 @@ import cv2
 import numpy as np
 def formatResponse(
     systemMessages: str,
-    sample: Dict[str, Any]
-) -> List[Dict]:
+    sample: Dict[str, Union[str, List[Union[Image.Image, Tuple[Image.Image, float]]]]]) -> List[Dict[str, Any]]:
     """
-    Formats the Gemini output into a Gemma3-friendly chat-style conversation.
-
+    Formats the response from the propreitary Gemini model into a Gemma-3 compatible, interleaved format for video comprehension.
     Args:
-        systemMessages (str): System prompt to guide behaviour.
-        sample (Dict): Should include 'image' (List[PIL.Image]), 'text' (prompt), and 'label' (Gemini output).
-
+        systemMessages (str): System messages to be included in the response.
+        sample (Dict[str, Union[str, List[Union[Image.Image, Tuple[Image.Image, float]]]]]): The sample response from the Gemini model. Should be of the following form:
+            - 'image': List[PIL.Image] or List[Tuple[PIL.Image, float]] for timestamped frames
+            - 'text': Prompt string given to the model
+            - 'label': Expected answer / Gemini-generated label
     Returns:
-        List[Dict]: A chat-style conversation compatible with Gemma's processor.
+        List[Dict[str, Any]]: The formatted response.
     """
-    return [
-        {
-            "role": "system",
-            "content": [{"type": "text", "text": systemMessages}],
-        },
-        {
-            "role": "user",
-            "content": [
-                *[{"type": "image", "image": img} for img in sample["image"]],
-                {"type": "text", "text": sample["text"]},
-            ],
-        },
-        {
-            "role": "assistant",
-            "content": [{"type": "text", "text": sample["label"]}],
-        }
-    ]
+    userContent = []
+    isTimeStamped = isinstance(sample['image'][0], tuple)
+    
+    for index, frame in enumerate(sample['image']):
+        if isTimeStamped:
+            image, timestamp = frame
+            userContent.append({"type": "text", "text": f"Frame {index + 1} @ {timestamp:.2f}s:"})
+        else:
+            image = frame
+            userContent.append(
+                {"type": "image", "image": image}
+            )
+        
+        #Add final query text.
+        userContent.append({"type": "text", "text": sample['text']})
 
+        return [
+            {
+                "role": "system",
+                "content": [{"type": "text", "text": systemMessages}]
+            },
+            {
+                "role": "user",
+                "content": userContent
+            },
+            {
+                "role": "assistant",
+                "content": [{"type": "text", "text": sample['label']}]
+            }
+        ]
 def frameExtractor(videopath: str, numframes: int = 16) -> List[Image.Image]:
     """
     Extracts a fixed number of frames from a video - evenly spaced.
@@ -48,7 +60,7 @@ def frameExtractor(videopath: str, numframes: int = 16) -> List[Image.Image]:
     """
     capture = cv2.VideoCapture(videopath)
     N = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-
+    FPS = capture.get(cv2.CAP_PROP_FPS) or 30.0
     if N == 0:
         raise ValueError("No frames found in video.")
     indices = np.linspace(0, N - 1, numframes, dtype=int)
@@ -59,7 +71,8 @@ def frameExtractor(videopath: str, numframes: int = 16) -> List[Image.Image]:
         ret, frame = capture.read()
         if ret:
             frameRGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frames.append(Image.fromarray(frameRGB))
+            timestamp = round(index / FPS, 2)
+            frames.append(Image.fromarray(frameRGB), timestamp)
     
     capture.release()
     return frames
