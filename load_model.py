@@ -65,7 +65,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--video",
         type=str,
-        default="/root/distillation-finetuning/obama.mp4",
+        default="obama.mp4",
         help="Path to the video file."
     )
     args = parser.parse_args()
