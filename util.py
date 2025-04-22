@@ -34,6 +34,10 @@ def formatResponse(
         #Add final query text.
         userContent.append({"type": "text", "text": sample['text']})
 
+        #Dummy labelling - so that the function doesn't fail for simple tests and trivial use-cases like normal inferencing.
+        if sample['label'] is None:
+            sample['label'] = "0"
+
         return [
             {
                 "role": "system",
