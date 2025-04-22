@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, Optional, Union, Tuple
-from transformers import Batch, AutoProcessor
+from transformers import AutoProcessor
 import torch
 from PIL import Image
 import cv2
@@ -20,38 +20,45 @@ def formatResponse(
     """
     userContent = []
     isTimeStamped = isinstance(sample['image'][0], tuple)
-    
     for index, frame in enumerate(sample['image']):
         if isTimeStamped:
             image, timestamp = frame
             userContent.append({"type": "text", "text": f"Frame {index + 1} @ {timestamp:.2f}s:"})
+            userContent.append({"type": "image", "image": image})
         else:
             image = frame
             userContent.append(
                 {"type": "image", "image": image}
             )
         
-        #Add final query text.
-        userContent.append({"type": "text", "text": sample['text']})
+    #Add final query text.
+    userContent.append({"type": "text", "text": sample['text']})
 
-        #Dummy labelling - so that the function doesn't fail for simple tests and trivial use-cases like normal inferencing.
-        if sample['label'] is None:
-            sample['label'] = "0"
-
+    #Dummy labelling - so that the function doesn't fail for simple tests and trivial use-cases like normal inferencing.
+    if sample['label'] is None:
         return [
-            {
-                "role": "system",
-                "content": [{"type": "text", "text": systemMessages}]
-            },
-            {
-                "role": "user",
-                "content": userContent
-            },
-            {
-                "role": "assistant",
-                "content": [{"type": "text", "text": sample['label']}]
-            }
-        ]
+        {
+            "role": "system",
+            "content": [{"type": "text", "text": systemMessages}]
+        },
+        {
+            "role": "user",
+            "content": userContent
+        }]
+    return [
+        {
+            "role": "system",
+            "content": [{"type": "text", "text": systemMessages}]
+        },
+        {
+            "role": "user",
+            "content": userContent
+        },
+        {
+            "role": "assistant",
+            "content": [{"type": "text", "text": sample['label']}]
+        }
+    ]
 def frameExtractor(videopath: str, numframes: int = 16) -> List[Image.Image]:
     """
     Extracts a fixed number of frames from a video - evenly spaced.
@@ -76,7 +83,7 @@ def frameExtractor(videopath: str, numframes: int = 16) -> List[Image.Image]:
         if ret:
             frameRGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             timestamp = round(index / FPS, 2)
-            frames.append(Image.fromarray(frameRGB), timestamp)
+            frames.append((Image.fromarray(frameRGB), timestamp))
     
     capture.release()
     return frames
