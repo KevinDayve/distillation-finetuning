@@ -62,4 +62,8 @@ if __name__ == "__main__":
         device_map="auto",
         torch_dtype="bf16"
     )
-    model, processor = model.loadModel()
+    try:
+        model, processor = model.loadModel()
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        raise
