@@ -24,7 +24,7 @@ BSZ = 4 #Batch size
 SYSMSG = "You are an expert video classification model trained to understand human action through careful and diligent analysis."
 modelID = 'google/gemma-3-4b-it' #Model ID
 activty = []   #list of activities.
-prompt = f"Please classify the activity in the video. The activity is one of the following: {activty}."
+prompt = f"Please classify the activity in the video. The activity is one of the following: {activty}. Only return the activity label. Do not return any other text."
 
 loraConfig = LoraConfig(
     r=8,
@@ -42,7 +42,7 @@ model, processor = model.loadModel()
 if os.path.isdir(annotDir) and len(annotDir) > 0:
     metrics = evaluate(
         videoDir=annotDir,
-        modelID=modelID,
+        modelID="gemini-2.0-flash-lite",
         sampleSize=100,
     )
     if metrics['accuracy'] < 0.7:
